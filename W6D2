@@ -1,0 +1,50 @@
+import os
+from google.colab import userdata
+from google import genai
+from google.genai import types
+
+api_key = userdata.get('GEMINI_API_KEY')
+client = genai.Client(api_key=api_key)
+
+sample_text = """
+Generative AI has witnessed tremendous growth in recent years, transitioning from an academic research tool into a foundational technology revolutionizing various industrial and service sectors. This evolution relies primarily on Transformer architectures and deep neural networks, enabling models to comprehend linguistic contexts and process massive volumes of textual and visual data.
+
+These capabilities allow intelligent models to generate novel text, complete software code, and produce high-quality images and videos mimicking human output. Despite the immense opportunities it offers for boosting productivity and operational efficiency, Generative AI faces complex technical and ethical challenges. Key among these are "hallucinations," where models produce confident yet factually incorrect information, alongside data biases, privacy concerns, and intellectual property disputes.
+"""
+
+print("=== Experiment 1: Temperature = 0.1 (High Consistency & Stability) ===")
+for i in range(3):
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=f"Summarize the following text in exactly two lines:\n{sample_text}",
+        config=types.GenerateContentConfig(temperature=0.1)
+    )
+    print(f"Attempt {i+1}:\n{response.text.strip()}\n" + "-"*40)
+
+print("\n=== Experiment 2: Temperature = 0.9 (High Diversity & Creativity) ===")
+for i in range(3):
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=f"Summarize the following text in exactly two lines:\n{sample_text}",
+        config=types.GenerateContentConfig(temperature=0.9)
+    )
+    print(f"Attempt {i+1}:\n{response.text.strip()}\n" + "-"*40)
+
+queries = [
+    "What is the capital of Egypt and what are its key tourist landmarks?",
+    "Who founded Apple and when was it established?",
+    "Explain the functionality of the Python library 'py_quantum_fast_v3' and how to install it.",
+    "Summarize the book 'Secrets of 18th Century Quantum Physics' by author Ahmed Saber.",
+    "Who won the 2026 FIFA World Cup and what was the score of the final match?"
+]
+
+print("=== Experiment 3: General Inquiries Evaluation ===")
+for idx, q in enumerate(queries, 1):
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=q,
+        config=types.GenerateContentConfig(temperature=0.3)
+    )
+    print(f"Query {idx}: {q}")
+    print(f"Response:\n{response.text.strip()}\n")
+    print("="*60 + "\n")
