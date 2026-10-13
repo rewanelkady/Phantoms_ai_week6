@@ -1,0 +1,54 @@
+import os
+import numpy as np
+from google import genai
+
+if "GEMINI_API_KEY" not in os.environ:
+    raise ValueError("Please set your GEMINI_API_KEY environment variable.")
+
+client = genai.Client()
+
+sentences = [
+    "The team won the football match after a great goal.",
+    "Our squad secured the soccer victory following a brilliant strike.",
+    "Python is an amazing programming language for data science.",
+    "I love writing code in Python for software development.",
+    "I went to the river bank to sit on the grass and relax.",
+    "I need to deposit my money at the local bank tomorrow.",
+    "Pizza and pasta are my favorite Italian meals.",
+    "Delicious burgers and fries make a great lunch.",
+    "The weather is very cold and rainy today.",
+    "A Python snake slithered silently through the tall grass.",
+]
+
+result = client.models.embed_content(
+    model="text-embedding-004",
+    contents=sentences,
+)
+
+embeddings = [np.array(e.values) for e in result.embeddings]
+
+print("=" * 60)
+print(f"Total sentences: {len(embeddings)}")
+print(f"Embedding dimensions per vector: {len(embeddings[0])}")
+print(f"First 5 values of sentence 1: {embeddings[0][:5]}")
+print("=" * 60)
+
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+pairs_to_compare = [
+    (0, 1, "Football match (different words, same meaning)"),
+    (2, 3, "Python programming (similar meaning and vocabulary)"),
+    (4, 5, "Word 'bank' (river vs. financial institution)"),
+    (6, 7, "Food and meals"),
+    (8, 9, "Weather conditions vs. Python snake"),
+]
+
+print("\n--- Similarity Comparison Results ---")
+for idx1, idx2, description in pairs_to_compare:
+    similarity = cosine_similarity(embeddings[idx1], embeddings[idx2])
+    print(f"Comparison: {description}")
+    print(f"   - Sentence A: \"{sentences[idx1]}\"")
+    print(f"   - Sentence B: \"{sentences[idx2]}\"")
+    print(f"   - Cosine Similarity: {similarity:.4f}\n")
+print("=" * 60)
