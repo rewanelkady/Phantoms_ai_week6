@@ -1,0 +1,46 @@
+import os
+from google import genai
+from google.genai import types
+
+if "GEMINI_API_KEY" not in os.environ:
+    raise ValueError("Please set your GEMINI_API_KEY environment variable.")
+
+client = genai.Client()
+
+question = "What is artificial intelligence? Explain simply in two lines."
+
+print("=" * 55)
+print(f"Question: {question}\n")
+
+print("--- 1. Patient Teacher Persona ---")
+res_patient = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents=question,
+    config=types.GenerateContentConfig(
+        system_instruction="You are a patient and friendly teacher who explains with enthusiasm and absolute simplicity for beginners.",
+        temperature=0.7,
+    ),
+)
+print(res_patient.text)
+print(f"\nToken Usage:")
+print(f"   - Input: {res_patient.usage_metadata.prompt_token_count}")
+print(f"   - Output: {res_patient.usage_metadata.candidates_token_count}")
+print(f"   - Total: {res_patient.usage_metadata.total_token_count}\n")
+
+print("-" * 55)
+
+print("--- 2. Concise Expert Persona ---")
+res_concise = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents=question,
+    config=types.GenerateContentConfig(
+        system_instruction="You are a precise tech expert who answers with extreme brevity and gets straight to the point without introductions.",
+        temperature=0.2,
+    ),
+)
+print(res_concise.text)
+print(f"\nToken Usage:")
+print(f"   - Input: {res_concise.usage_metadata.prompt_token_count}")
+print(f"   - Output: {res_concise.usage_metadata.candidates_token_count}")
+print(f"   - Total: {res_concise.usage_metadata.total_token_count}")
+print("=" * 55)
