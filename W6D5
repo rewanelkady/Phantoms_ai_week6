@@ -1,0 +1,147 @@
+import os
+import json
+import time
+from groq import Groq
+
+class ReviewExperimenter:
+    def __init__(self):
+        self.api_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+        self.engine_model = "openai/gpt-oss-20b"
+        self.sampling_temp = 0.2
+        self.iteration_count = 3
+        
+        self.dataset = [
+            {"index": 1, "content": "اشتريت سماعة Anker من أحمد في المعادي، الصوت ممتاز والبطارية بتعدي اليوم كله. التوصيل جه في معاده. أنصح بيها."},
+            {"index": 2, "content": "موبايل Samsung A54 كاميرته حلوة جداً بس البطارية بتخلص قبل نص اليوم والشاحن بطيء. مش عارف أنصح بيه ولا لأ."},
+            {"index": 3, "content": "التوصيل اتأخر أسبوع كامل ومحدش رد على الرسايل. الخدمة وحشة جداً."},
+            {"index": 4, "content": "برافو عليهم، طلبت الشنطة تيجي في يومين فجت بعد تلات أسابيع، وكمان الزرار اتكسر من أول استخدام. خدمة تحفة فعلاً 👏"},
+            {"index": 5, "content": "لابتوب Lenovo IdeaPad اللي استلمته من فرع سيتي ستارز شغال تمام والسعر مناسب، بس مفيش كرتونة أصلية والتغليف كان ضعيف."},
+        ]
+        
+        self.legacy_queries = [
+            f"Analyze this customer feedback regarding its quality, keep your response brief, state the reasoning, and extract any named entities or products. Review text: {item['content']}"
+            for item in self.dataset
+        ]
+        
+        self.system_instruction = (
+            "You are an expert sentiment analysis specialist. "
+            "Adhere strictly to the requested schema. "
+            "Output must be a pure JSON object without markdown formatting wrappers or conversational filler."
+        )
+
+    def build_optimized_prompt(self, review_text):
+        return f"""
+Target Review:
+{review_text}
+
+Required Actions:
+1. Classify the overall sentiment strictly as 'positive', 'negative', or 'mixed'.
+2. Provide a concise justification based exclusively on the review text.
+3. Extract all explicit entities categorized as person, brand, product, or location.
+4. Return an empty list if a category is missing, and null for indeterminate details.
+
+Required JSON Schema:
+{{
+  "sentiment": "positive | negative | mixed",
+  "explanation": "Concise justification in English",
+  "entities": [
+    {{
+      "text": "Exact entity mention",
+      "type": "person | brand | product | location"
+    }}
+  ]
+}}
+"""
+
+    def invoke_llm(self, prompt_str, use_system_layer=False):
+        messages_payload = []
+        if use_system_layer:
+            messages_payload.append({"role": "system", "content": self.system_instruction})
+        messages_payload.append({"role": "user", "content": prompt_str})
+
+        response_obj = self.api_client.chat.completions.create(
+            model=self.engine_model,
+            temperature=self.sampling_temp,
+            messages=messages_payload,
+        )
+        return response_obj.choices[0].message.content
+
+    def verify_json_integrity(self, raw_text):
+        try:
+            json.loads(raw_text)
+            return True
+        except (json.JSONDecodeError, TypeError):
+            return False
+
+    def run_evaluation_suite(self):
+        execution_log = []
+        test_tasks = [
+            ("baseline", item["index"], self.legacy_queries[item["index"] - 1], False)
+            for item in self.dataset
+        ] + [
+            ("optimized", item["index"], self.build_optimized_prompt(item["content"]), True)
+            for item in self.dataset
+        ]
+
+        total_steps = len(test_tasks) * self.iteration_count
+        counter = 0
+
+        for mode, item_id, prompt_body, enhanced_flag in test_tasks:
+            for run_idx in range(1, self.iteration_count + 1):
+                counter += 1
+                print(f"Executing step [{counter}/{total_steps}] -> Mode: {mode.upper()} | ID: {item_id} | Run: {run_idx}")
+
+                try:
+                    completion_output = self.invoke_llm(prompt_body, use_system_layer=enhanced_flag)
+                    is_json_valid = self.verify_json_integrity(completion_output)
+                    processing_error = None
+                except Exception as ex:
+                    completion_output = ""
+                    is_json_valid = False
+                    processing_error = str(ex)
+
+                execution_log.append({
+                    "execution_mode": mode,
+                    "target_id": item_id,
+                    "run_index": run_idx,
+                    "model_identifier": self.engine_model,
+                    "temperature_setting": self.sampling_temp,
+                    "prompt_text": prompt_body,
+                    "model_response": completion_output,
+                    "json_status": is_json_valid,
+                    "error_log": processing_error
+                })
+                time.sleep(0.4)
+
+        with open("W6D5_results.json", "w", encoding="utf-8") as f_out:
+            json.dump(execution_log, f_out, ensure_ascii=False, indent=2)
+
+        return execution_log
+
+    def generate_markdown_log(self, logs):
+        baseline_group = [x for x in logs if x["execution_mode"] == "baseline"]
+        optimized_group = [x for x in logs if x["execution_mode"] == "optimized"]
+        
+        b_valid = sum(1 for x in baseline_group if x["json_status"])
+        o_valid = sum(1 for x in optimized_group if x["json_status"])
+
+        with open("notes.md", "a", encoding="utf-8") as f_notes:
+            f_notes.write("\n\n# Advanced Prompt Engineering & Performance Analysis (W6D5)\n")
+            f_notes.write("\n## Core Evaluation Standards\n")
+            f_notes.write("- Uniformity and structural rigidity across payloads.\n")
+            f_notes.write("- Bounded classification labels for sentiment mapping.\n")
+            f_notes.write("- Strict adherence to contextual evidence without hallucination.\n")
+
+            f_notes.write("\n## Quantitative Summary\n")
+            f_notes.write(f"- Baseline Valid JSON Count: {b_valid}/{len(baseline_group)}\n")
+            f_notes.write(f"- Optimized Valid JSON Count: {o_valid}/{len(optimized_group)}\n")
+
+        print("Execution completed successfully. Results and notes updated.")
+
+if __name__ == "__main__":
+    if not os.environ.get("GROQ_API_KEY"):
+        raise EnvironmentError("GROQ_API_KEY is not set in the environment variables.")
+    
+    experiment = ReviewExperimenter()
+    results_data = experiment.run_evaluation_suite()
+    experiment.generate_markdown_log(results_data)
