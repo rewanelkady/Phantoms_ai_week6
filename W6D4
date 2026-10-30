@@ -1,0 +1,169 @@
+import numpy as np
+from sentence_transformers import SentenceTransformer, util
+from itertools import combinations
+
+# بنحمل الموديل والجمل الأساسية
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+sentences = [
+    "The football team won the championship.",
+    "The players celebrated after winning the league.",
+    "A striker scored three goals in the match.",
+    "Python is used for data analysis.",
+    "The programmer fixed a bug in the code.",
+    "Coding helps people automate daily tasks.",
+    "The chef cooked a delicious meal.",
+    "She prepared a tasty dinner with fresh vegetables.",
+    "He deposited his money at the bank.",
+    "The fisherman sat on the bank of the river.",
+]
+
+embeddings = model.encode(sentences)
+
+# دالة حساب الكوساين سيميلاريتي يدوي من غير مكتبة جاهزة
+def my_cosine(v1, v2):
+    v1 = np.array(v1, dtype=float)
+    v2 = np.array(v2, dtype=float)
+
+    dot_product = np.dot(v1, v2)
+    length1 = np.sqrt(np.sum(v1 ** 2))
+    length2 = np.sqrt(np.sum(v2 ** 2))
+
+    if length1 == 0 or length2 == 0:
+        return 0.0
+
+    return dot_product / (length1 * length2)
+
+# تجربة حسابية بسيطة على فيكتورات صغيرة للتأكد
+a = np.array([1, 2, 2])
+b = np.array([2, 1, 2])
+c = np.array([1, 0, 0])
+
+print("Manual calculation examples")
+
+for name, v1, v2 in [("Pair 1", a, b), ("Pair 2", a, c)]:
+    dot = np.dot(v1, v2)
+    mag1 = np.sqrt(np.sum(v1 ** 2))
+    mag2 = np.sqrt(np.sum(v2 ** 2))
+    cosine = my_cosine(v1, v2)
+
+    print(f"\n{name}")
+    print("Dot product:", dot)
+    print("Magnitude 1:", mag1)
+    print("Magnitude 2:", mag2)
+    print("Cosine similarity:", round(cosine, 4))
+
+# مقارنة نتائج دالتنا مع الدالة الجاهزة في util
+pairs_to_check = [(1, 2), (7, 8), (9, 10)]
+
+print("\nComparing cosine similarity results")
+
+for i, j in pairs_to_check:
+    v1 = embeddings[i - 1]
+    v2 = embeddings[j - 1]
+
+    our_score = my_cosine(v1, v2)
+    model_score = util.cos_sim(v1, v2).item()
+
+    print(f"\nPair ({i}, {j})")
+    print("Our result:", round(our_score, 6))
+    print("Yesterday's result:", round(model_score, 6))
+    print("Match:", np.isclose(our_score, model_score, atol=1e-5))
+
+# مقارنة الكوساين مع المسافة الإكليدية
+print("\nCosine similarity and Euclidean distance")
+
+for i, j in pairs_to_check:
+    v1 = embeddings[i - 1]
+    v2 = embeddings[j - 1]
+
+    cosine = my_cosine(v1, v2)
+    distance = np.sqrt(np.sum((v1 - v2) ** 2))
+
+    print(f"\nPair ({i}, {j})")
+    print("Cosine similarity:", round(cosine, 4))
+    print("Euclidean distance:", round(distance, 4))
+
+# تجربة تكبير حجم أحد الفكتورات في الضرب في 10
+v1 = embeddings[0]
+v2 = embeddings[1]
+
+original_cosine = my_cosine(v1, v2)
+original_distance = np.sqrt(np.sum((v1 - v2) ** 2))
+
+larger_v1 = v1 * 10
+
+new_cosine = my_cosine(larger_v1, v2)
+new_distance = np.sqrt(np.sum((larger_v1 - v2) ** 2))
+
+print("\nVector size experiment")
+print("Original cosine:", round(original_cosine, 4))
+print("Cosine after multiplying by 10:", round(new_cosine, 4))
+print("Original distance:", round(original_distance, 4))
+print("Distance after multiplying by 10:", round(new_distance, 4))
+
+# تجربة سيرش مصغر Semantic Search
+question = "How can programming help people write code and solve problems?"
+question_embedding = model.encode(question)
+
+search_results = []
+for i, sentence_embedding in enumerate(embeddings):
+    score = my_cosine(question_embedding, sentence_embedding)
+    search_results.append((score, i, sentences[i]))
+
+search_results.sort(reverse=True)
+
+print("\nMini Semantic Search")
+print("Question:", question)
+print("\nTop 3 closest sentences:")
+
+for score, i, sentence in search_results[:3]:
+    print(f"\nSentence {i + 1}: {sentence}")
+    print("Similarity:", round(score, 4))
+
+# حفظ النتائج في ملف notes.md زي ما طلبنا
+with open("notes.md", "a", encoding="utf-8") as file:
+    file.write("\n\n# W6D4 - Cosine Similarity\n")
+    
+    file.write("\n## Manual calculations\n")
+    for name, v1, v2 in [("Pair 1", a, b), ("Pair 2", a, c)]:
+        dot = np.dot(v1, v2)
+        mag1 = np.sqrt(np.sum(v1 ** 2))
+        mag2 = np.sqrt(np.sum(v2 ** 2))
+        cosine = my_cosine(v1, v2)
+
+        file.write(f"\n### {name}\n")
+        file.write(f"- Dot product: {dot}\n")
+        file.write(f"- First magnitude: {mag1:.4f}\n")
+        file.write(f"- Second magnitude: {mag2:.4f}\n")
+        file.write(f"- Cosine similarity: {cosine:.4f}\n")
+
+    file.write("\n## Comparing the two cosine functions\n")
+    file.write("\n| Pair | Our cosine | Previous cosine | Match |\n")
+    file.write("|---|---:|---:|---|\n")
+
+    for i, j in pairs_to_check:
+        our_score = my_cosine(embeddings[i - 1], embeddings[j - 1])
+        model_score = util.cos_sim(embeddings[i - 1], embeddings[j - 1]).item()
+        file.write(f"| ({i}, {j}) | {our_score:.6f} | {model_score:.6f} | {np.isclose(our_score, model_score, atol=1e-5)} |\n")
+
+    file.write("\n## Cosine vs Euclidean distance\n")
+    file.write("\n| Pair | Cosine similarity | Euclidean distance |\n")
+    file.write("|---|---:|---|\n")
+
+    for i, j in pairs_to_check:
+        v1 = embeddings[i - 1]
+        v2 = embeddings[j - 1]
+        cosine = my_cosine(v1, v2)
+        distance = np.sqrt(np.sum((v1 - v2) ** 2))
+        file.write(f"| ({i}, {j}) | {cosine:.4f} | {distance:.4f} |\n")
+
+    file.write("\n## Vector size experiment\n")
+    file.write(f"\n- Original cosine: {original_cosine:.6f}\n")
+    file.write(f"- New cosine: {new_cosine:.6f}\n")
+    file.write(f"- Original distance: {original_distance:.6f}\n")
+    file.write(f"- New distance: {new_distance:.6f}\n")
+
+    file.write("\nConclusion: Cosine measures direction, so multiplying by 10 keeps the cosine score the same while Euclidean distance changes because it cares about length.\n")
+
+print("\nDone! Check notes.md and review the results.")
